@@ -1,0 +1,229 @@
+import java.util.concurrent.Semaphore;
+import java.util.Scanner;
+
+public class Synchronized {
+
+    static Semaphore mutex = new Semaphore(1); // mutex = 1
+    static Semaphore wrt = new Semaphore(1); // wrt = 1
+    static int readCount = 0;
+    static String message = "Hello";
+    static Scanner SC = new Scanner(System.in);
+
+    static class Reader implements Runnable { // Reader Thread
+        public void run() {
+            try {
+                // Acquire Section
+                mutex.acquire();
+                readCount++;
+                if (readCount == 1) {
+                    wrt.acquire();
+                }
+                mutex.release();
+                // Reading section
+                System.out.println("Thread " + Thread.currentThread().getName() + " is READING: " + message);
+                Thread.sleep(1500);
+                System.out.println("Thread " + Thread.currentThread().getName() + " has FINISHED READING");
+                // Releasing section
+                mutex.acquire();
+                readCount--;
+                if (readCount == 0) {
+                    wrt.release();
+                }
+                mutex.release();
+            } catch (InterruptedException e) {
+                System.out.println(e.getMessage());
+            }
+        }
+    }
+
+    static class Writer implements Runnable { // Writer Thread
+        public void run() {
+            try {
+                wrt.acquire();
+                message = "Good Morning";
+                System.out.println("Thread " + Thread.currentThread().getName() + " is WRITING: " + message);
+
+                Thread.sleep(1500);
+                System.out.println("Thread " + Thread.currentThread().getName() + " has finished WRITING");
+                wrt.release();
+            } catch (InterruptedException e) {
+                System.out.println(e.getMessage());
+            }
+        }
+    }
+
+    // Main Program
+    public static void main(String[] args) throws Exception {
+        Reader read = new Reader();
+        Writer write = new Writer();
+        Thread r1 = new Thread(read);
+        r1.setName("Reader1");
+        Thread r2 = new Thread(read);
+        r2.setName("Reader2");
+        Thread r3 = new Thread(read);
+        r3.setName("Reader3");
+        Thread w1 = new Thread(write);
+        w1.setName("Writer1");
+        Thread w2 = new Thread(write);
+        w2.setName("Writer2");
+        Thread w3 = new Thread(write);
+        w3.setName("Writer3");
+        w1.start();
+        r1.start();
+        w2.start();
+        r2.start();
+        w3.start();
+        r3.start();
+
+    }
+}
+
+
+###################################################################
+
+This code is an example of a **Reader-Writer problem** using **semaphores** to handle synchronization between multiple threads. The program demonstrates how multiple **Reader threads** can read a shared resource concurrently, but only one **Writer thread** can modify the resource at a time. The goal is to ensure that writers have exclusive access to the resource, while readers can access it concurrently, as long as no writer is currently writing.
+
+Let's break down the code and its logic:
+
+### **Key Concepts**:
+1. **Semaphore**:
+   - A **semaphore** is used to control access to a shared resource by multiple threads.
+   - It has two main types:
+     - **Mutex Semaphore** (binary semaphore) ensures mutual exclusion (only one thread can access a resource at a time).
+     - **General Semaphore** allows multiple threads to access the resource depending on its value.
+   
+2. **Reader-Writer Problem**:
+   - **Readers**: Can read the shared resource concurrently, but no readers can read while a writer is writing.
+   - **Writers**: Have exclusive access to the resource. No other reader or writer can modify the resource while a writer is writing.
+
+### **Code Explanation**:
+
+#### **Global Variables**:
+```java
+static Semaphore mutex = new Semaphore(1); // Mutex = 1 for mutual exclusion of readCount
+static Semaphore wrt = new Semaphore(1); // wrt = 1 for writer synchronization
+static int readCount = 0; // Keeps track of the number of active readers
+static String message = "Hello"; // Shared resource (message to be read/written)
+static Scanner SC = new Scanner(System.in); // For reading input from user (not used in this code)
+```
+- **`mutex`**: Used to protect `readCount` (the number of readers currently reading) from race conditions.
+- **`wrt`**: Ensures that only one writer can access the resource at a time. This prevents a race between writers and readers.
+- **`readCount`**: Keeps track of how many reader threads are currently accessing the shared resource.
+
+#### **Reader Thread**:
+```java
+static class Reader implements Runnable { 
+    public void run() {
+        try {
+            // Acquire Section
+            mutex.acquire(); // Lock mutex to update readCount
+            readCount++; // Increment the number of readers
+            if (readCount == 1) {
+                wrt.acquire(); // If this is the first reader, block writers
+            }
+            mutex.release(); // Release mutex lock
+
+            // Reading section
+            System.out.println("Thread " + Thread.currentThread().getName() + " is READING: " + message);
+            Thread.sleep(1500); // Simulate reading operation
+            System.out.println("Thread " + Thread.currentThread().getName() + " has FINISHED READING");
+
+            // Releasing section
+            mutex.acquire(); // Lock mutex to update readCount
+            readCount--; // Decrease the number of readers
+            if (readCount == 0) {
+                wrt.release(); // If no readers are left, allow writers to access the resource
+            }
+            mutex.release(); // Release mutex lock
+        } catch (InterruptedException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+}
+```
+**Explanation**:
+- Each **Reader thread** performs the following:
+  1. It acquires the **mutex** to update the `readCount` (number of readers).
+  2. If it is the first reader (`readCount == 1`), it acquires the **wrt** semaphore to block writers from accessing the resource.
+  3. Then it releases the **mutex** lock and proceeds to read the shared `message` resource.
+  4. After finishing reading, it locks the **mutex** again to update `readCount`.
+  5. If it is the last reader (`readCount == 0`), it releases the **wrt** semaphore to allow writers to write.
+
+#### **Writer Thread**:
+```java
+static class Writer implements Runnable { 
+    public void run() {
+        try {
+            wrt.acquire(); // Acquire writer's lock, preventing other writers/readers
+            message = "Good Morning"; // Write operation
+            System.out.println("Thread " + Thread.currentThread().getName() + " is WRITING: " + message);
+
+            Thread.sleep(1500); // Simulate writing operation
+            System.out.println("Thread " + Thread.currentThread().getName() + " has finished WRITING");
+            wrt.release(); // Release the writer's lock, allowing other writers/readers to access the resource
+        } catch (InterruptedException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+}
+```
+**Explanation**:
+- Each **Writer thread**:
+  1. Acquires the **wrt** semaphore, ensuring exclusive access to the shared `message` resource (other writers or readers cannot access it).
+  2. Updates the shared `message` and simulates a writing operation.
+  3. After completing the write operation, it releases the **wrt** semaphore to allow other threads to access the resource.
+
+#### **Main Program**:
+```java
+public static void main(String[] args) throws Exception {
+    Reader read = new Reader();
+    Writer write = new Writer();
+    
+    Thread r1 = new Thread(read);
+    r1.setName("Reader1");
+    Thread r2 = new Thread(read);
+    r2.setName("Reader2");
+    Thread r3 = new Thread(read);
+    r3.setName("Reader3");
+    Thread w1 = new Thread(write);
+    w1.setName("Writer1");
+    Thread w2 = new Thread(write);
+    w2.setName("Writer2");
+    Thread w3 = new Thread(write);
+    w3.setName("Writer3");
+
+    // Start all threads
+    w1.start();
+    r1.start();
+    w2.start();
+    r2.start();
+    w3.start();
+    r3.start();
+}
+```
+**Explanation**:
+- **Main Program** creates multiple threads (3 readers and 3 writers), and each thread is started using the `start()` method.
+- The threads execute the `run()` method of the `Reader` and `Writer` classes concurrently.
+
+### **How the Synchronization Works**:
+1. **Readers** can read the shared `message` concurrently, but when the first reader starts reading, it blocks the writers using the `wrt` semaphore.
+2. As long as there are readers (`readCount > 0`), writers are blocked. Once the last reader finishes, the **wrt** semaphore is released, and a writer can write.
+3. **Writers** can only write when there are no readers, ensuring that the shared `message` is updated exclusively by one writer at a time.
+
+### **Output**:
+- The output shows how the readers read the message concurrently, while writers update it one at a time. Here's an example output:
+```
+Thread Writer1 is WRITING: Good Morning
+Thread Reader1 is READING: Hello
+Thread Reader2 is READING: Hello
+Thread Reader3 is READING: Hello
+Thread Writer1 has finished WRITING
+Thread Reader1 has FINISHED READING
+Thread Reader2 has FINISHED READING
+Thread Reader3 has FINISHED READING
+```
+
+### **Key Concepts**:
+- **Concurrency**: Multiple threads perform operations concurrently.
+- **Mutex**: Ensures that only one thread can modify the shared `readCount`.
+- **Semaphore**: Controls access to shared resources, ensuring exclusive access for writers and allowing concurrent access for readers.

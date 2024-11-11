@@ -1,0 +1,1642 @@
+*****************************************pass1********************************************
+
+from os import sep, write
+import pdb
+
+
+class Mnemonics:
+    def __init__(self):
+        self.AD = {
+            "START": 1,
+            "END": 2,
+            "ORIGIN": 3,
+            "EQU": 4,
+            "LTORG": 5
+        }
+        self.RG = {
+            "AREG": 1,
+            "BREG": 2,
+            "CREG": 3,
+            "DREG": 4
+        }
+        self.DL = {
+            "DC": 1,
+            "DS": 2
+        }
+        self.IS = {
+            "STOP": 0,
+            "ADD": 1,
+            "SUB": 2,
+            "MULT": 3,
+            "MOVER": 4,
+            "MOVEM": 5,
+            "COMP": 6,
+            "BC": 7,
+            "DIV": 8,
+            "READ": 9,
+            "PRINT": 10
+        }
+        self.CC = {
+            "LT": 1,
+            "LE": 2,
+            "EQ": 3,
+            "GT": 4,
+            "GE": 5,
+            "ANY": 6
+        }
+
+    def getClassType(self,string):
+        if string in self.AD:
+            return "AD"
+        elif string in self.CC:
+            return "CC"
+        elif string in self.DL:
+            return "DL"
+        elif string in self.IS:
+            return "IS"
+        elif string in self.RG:
+            return "RG"
+        else:
+            return ""
+
+    def getMachineCode(self,string):
+        if string in self.AD:
+            return self.AD[string]
+        elif string in self.CC:
+            return self.CC[string]
+        elif string in self.DL:
+            return self.DL[string]
+        elif string in self.IS:
+            return self.IS[string]
+        elif string in self.RG:
+            return self.RG[string]
+        else:
+            return -1
+
+
+class pass1:
+    def __init__(self):
+        self.lookup = Mnemonics()
+        self.symbolTable = {}
+        self.literalTable = {}
+        self.litTableIndex = 0 
+        self.poolTable = [0]
+        self.IC = [] 
+        self.location = 0
+        self.litTabPtr = 0 
+        self.InputFile = open("D:\Kamlesh\spoc\input.txt","r")
+        self.literalTableFile = open("literalTable.txt","w")
+        self.symbolTableFile = open("symbolTable.txt","w")
+        self.poolTableFile = open("poolTable.txt","w")
+        self.ICFile = open("intermediateCode.txt","w")
+
+
+    def calculateLocation(self,string):
+        if "+" in string:
+            string = string.split("+")
+            return self.symbolTable[string[0]] + int(string[1])
+        elif "-" in string:
+            string = string.split("-")
+            return self.symbolTable[string[0]] - int(string[1])
+        else:
+            return self.symbolTable[string]
+
+    def parseFile(self):
+        for line in self.InputFile.readlines():
+            self.IC.append([])
+            line = line.strip("\n")
+            line = line.split("\t")
+
+
+
+            if line[0] != "":
+                if line[0] in self.symbolTable:
+                    self.symbolTable[line[0]] = self.location 
+                else:
+                    self.symbolTable[line[0]] = self.location 
+
+            if line[1] == "START":
+                self.location = int(line[2])
+                self.IC[-1].append(('AD',1))
+                self.IC[-1].append(("C",int(line[2])))
+            elif line[1] == "LTORG":
+                
+                for i in range(self.poolTable[-1],len(self.literalTable)):
+                    self.literalTable[i][1] = self.location
+                    self.IC[-1].append(("DL",1))
+                    self.IC[-1].append(("C",self.literalTable[i][0]))
+                    self.IC[-1].append(self.location)
+                    self.location += 1
+                    self.litTabPtr += 1
+                    if i < len(self.literalTable) - 1:
+                        self.IC.append([])
+                self.poolTable.append(self.litTabPtr)
+            elif line[1] == "ORIGIN":
+                self.location = self.calculateLocation(line[2])
+                self.IC[-1].append(("AD",3))
+                self.IC[-1].append(("C",self.location))
+            elif line[1] == "EQU":
+                newlocation =  self.calculateLocation(line[2])
+                self.symbolTable[line[0]] = newlocation
+                self.IC[-1].append(("AD",4))
+                self.IC[-1].append(("C",newlocation))
+            elif line[1] == "DC":
+                self.IC[-1].append(("DL",1))
+                self.IC[-1].append(("C",int(line[2])))
+                self.IC[-1].append(self.location)
+                self.location += 1
+            elif line[1] == "DS":
+                self.IC[-1].append(("DL",2))
+                self.IC[-1].append(("C",int(line[2])))
+                self.IC[-1].append(self.location)
+                self.location += int(line[2])
+            elif line[1] == "STOP":
+                self.IC[-1].append(("IS",0))
+                self.IC[-1].append(self.location)
+                self.location += 1
+            elif line[1] == "END":
+                self.IC[-1].append(("AD",2))
+                if self.litTabPtr != len(self.literalTable):
+                    # literalKeys = list(self.literalTable.keys())
+                    for i in range(self.poolTable[-1],len(self.literalTable)):
+                        self.IC.append([])
+                        self.literalTable[i][1] = self.location
+                        self.IC[-1].append(("DL",1))
+                        self.IC[-1].append(("C",self.literalTable[i][0]))
+                        self.IC[-1].append(self.location)
+                        self.location += 1
+                        self.litTabPtr += 1
+                    self.poolTable.append(self.litTabPtr)
+            elif line[1] == "PRINT":
+                self.IC[-1].append(("IS",10))
+                symTabKeys = list(self.symbolTable.keys())
+                self.IC[-1].append(("S",symTabKeys.index(line[2])))
+                self.IC[-1].append(self.location)
+                self.location += 1
+            elif line[1] == "READ":
+                self.IC[-1].append(("IS",9))
+                self.symbolTable[line[2]] = None
+                symTabKeys = list(self.symbolTable.keys())
+                self.IC[-1].append(("S",symTabKeys.index(line[2])))
+                self.IC[-1].append(self.location)
+                self.location += 1
+            elif line[1] == "BC":
+                self.IC[-1].append(("IS",7))
+                classType = self.lookup.getClassType(line[2])
+                machineCode = self.lookup.getMachineCode(line[2])
+                self.IC[-1].append((classType,machineCode))
+                if line[3]  not in self.symbolTable:
+                    self.symbolTable[line[3]] = None
+                symTabKeys = list(self.symbolTable.keys())
+                self.IC[-1].append(("S",symTabKeys.index(line[3])))
+                self.IC[-1].append(self.location)
+                self.location += 1
+            else:
+                
+                classType = self.lookup.getClassType(line[1])
+                machineCode = self.lookup.getMachineCode(line[1])
+                self.IC[-1].append((classType,machineCode))
+
+                classType = self.lookup.getClassType(line[2])
+                machineCode = self.lookup.getMachineCode(line[2])
+                self.IC[-1].append((classType,machineCode))
+                
+                if "=" in line[3]:
+                    constant = line[3].strip("=")
+                    constant = int(constant.strip("'"))
+                    self.literalTable[self.litTableIndex] = [constant,None]
+                    self.IC[-1].append(("L",self.litTableIndex))
+                    self.IC[-1].append(self.location)
+                    self.litTableIndex += 1
+                else:
+                    if line[3] in self.symbolTable:
+                        symbolTableKeys = list(self.symbolTable.keys())
+                        self.IC[-1].append(("S",symbolTableKeys.index(line[3])))
+                        self.IC[-1].append(self.location)
+                    else:
+                        self.symbolTable[line[3]] = None
+                        symbolTableKeys = list(self.symbolTable.keys())
+                        self.IC[-1].append(("S",symbolTableKeys.index(line[3])))
+                        self.IC[-1].append(self.location)
+
+                self.location += 1
+
+        self.printLiteralTable()
+        self.printSymbolTable()
+        self.printPoolTable()
+        self.printIntermdeiateCode()
+
+    def printLiteralTable(self):
+        tab = "\t"
+        endline = "\n"
+        print("\nLITERAL TABLE:")
+        for item in range(len(self.literalTable)):
+            line = str(item) + tab + str(self.literalTable[item][0]) + tab +str(self.literalTable[item][1]) + endline;
+            print(line,end="")
+            self.literalTableFile.write(line)
+        self.literalTableFile.close()
+        print("\n")
+
+
+    def printSymbolTable(self):
+        tab = "\t"
+        endline = "\n"
+        print("\nSYMBOL TABLE:")
+        for index,item in enumerate(self.symbolTable):
+            line = str(index) + tab + str(item) + tab + str(self.symbolTable[item]) + endline
+            print(line,end="")
+            self.symbolTableFile.write(line)
+        self.symbolTableFile.close()
+        print("\n")
+
+    def printPoolTable(self):
+        tab = "\t"
+        endline = "\n"
+        print("\nPOOL TABLE:")
+        for item in range(len(self.poolTable)):
+            print(self.poolTable[item])
+            self.poolTableFile.write(str(self.poolTable[item]) + endline)
+        self.poolTableFile.close()
+
+    def printIntermdeiateCode(self):
+        tab = "\t"
+        endline = "\n"
+        print("\nIntermediate Code:")
+        for item in self.IC:
+            line = ""
+            for i in range(len(item)):
+                line += str(item[i])
+                if i != len(item):
+                    line += tab
+            line += endline
+            print(line,end="")
+            self.ICFile.write(line)
+        self.ICFile.close()
+
+
+obj = pass1()
+obj.parseFile()
+
+
+
+
+
+
+
+
+************************option 
+class Mnemonics:
+    def __init__(self):
+        # Define tables for AD, IS, DL, and registers
+        self.AD = {"START": 1, "END": 2, "ORIGIN": 3, "EQU": 4, "LTORG": 5}
+        self.RG = {"AREG": 1, "BREG": 2, "CREG": 3}
+        self.DL = {"DC": 1, "DS": 2}
+        self.IS = {
+            "STOP": 0, "ADD": 1, "SUB": 2, "MULT": 3, "MOVER": 4, 
+            "MOVEM": 5, "COMP": 6, "BC": 7, "DIV": 8, "READ": 9, "PRINT": 10
+        }
+        self.CC = {"LT": 1, "LE": 2, "EQ": 3, "GT": 4, "GE": 5, "ANY": 6}
+
+    def getClassType(self, word):
+        if word in self.AD: return "AD"
+        if word in self.IS: return "IS"
+        if word in self.DL: return "DL"
+        if word in self.RG: return "RG"
+        if word in self.CC: return "CC"
+        return ""
+
+    def getCode(self, word):
+        if word in self.AD: return self.AD[word]
+        if word in self.IS: return self.IS[word]
+        if word in self.DL: return self.DL[word]
+        if word in self.RG: return self.RG[word]
+        if word in self.CC: return self.CC[word]
+        return -1
+
+
+class AssemblerPass1:
+    def __init__(self):
+        self.mnemonics = Mnemonics()
+        self.symbolTable = {}
+        self.literalTable = {}
+        self.poolTable = []
+        self.intermediateCode = []
+        self.locationCounter = 0
+        self.literalIndex = 0
+        self.poolTable.append(self.literalIndex)
+
+    def processLine(self, line):
+        parts = line.strip().split()
+        self.intermediateCode.append([])
+
+        if parts[0] == "START":
+            self.locationCounter = int(parts[1])
+            self.intermediateCode[-1].append(("AD", 1))
+            self.intermediateCode[-1].append(("C", self.locationCounter))
+
+        elif len(parts) > 1 and parts[1] in self.mnemonics.DL:
+            self.symbolTable[parts[0]] = self.locationCounter
+            if parts[1] == "DC":
+                self.intermediateCode[-1].append(("DL", 1))
+                self.intermediateCode[-1].append(("C", int(parts[2])))
+            elif parts[1] == "DS":
+                self.intermediateCode[-1].append(("DL", 2))
+                self.intermediateCode[-1].append(("C", int(parts[2])))
+            self.locationCounter += 1
+
+        elif parts[0] in self.mnemonics.IS:
+            self.intermediateCode[-1].append(("IS", self.mnemonics.getCode(parts[0])))
+            if len(parts) > 1 and parts[1] in self.mnemonics.RG:
+                self.intermediateCode[-1].append(("RG", self.mnemonics.getCode(parts[1])))
+            if len(parts) > 2 and parts[2][0] == '=':
+                literal = int(parts[2][2:-1])
+                self.literalTable[self.literalIndex] = [literal, None]
+                self.intermediateCode[-1].append(("L", self.literalIndex))
+                self.literalIndex += 1
+            elif len(parts) > 2:
+                if parts[2] not in self.symbolTable:
+                    self.symbolTable[parts[2]] = None
+                self.intermediateCode[-1].append(("S", list(self.symbolTable.keys()).index(parts[2])))
+            self.locationCounter += 1
+
+        elif parts[0] == "LTORG":
+            self.poolTable.append(self.literalIndex)
+            for i in range(self.poolTable[-2], self.poolTable[-1]):
+                self.literalTable[i][1] = self.locationCounter
+                self.locationCounter += 1
+
+        elif parts[0] == "END":
+            self.poolTable.append(self.literalIndex)
+            for i in range(self.poolTable[-2], self.poolTable[-1]):
+                self.literalTable[i][1] = self.locationCounter
+                self.locationCounter += 1
+            self.intermediateCode[-1].append(("AD", 2))
+
+        else:
+            if parts[0] not in self.symbolTable:
+                self.symbolTable[parts[0]] = self.locationCounter
+            self.locationCounter += 1
+
+    def writeToFile(self):
+        with open("SymbolTable.txt", "w") as f:
+            f.write("Symbol Table:\n")
+            for symbol, address in self.symbolTable.items():
+                f.write(f"{symbol}\t{address}\n")
+
+        with open("LiteralTable.txt", "w") as f:
+            f.write("Literal Table:\n")
+            for literal, details in self.literalTable.items():
+                f.write(f"{literal}\t{details[0]}\t{details[1]}\n")
+
+        with open("PoolTable.txt", "w") as f:
+            f.write("Pool Table:\n")
+            for index in self.poolTable:
+                f.write(f"{index}\n")
+
+        with open("IntermediateCode.txt", "w") as f:
+            f.write("Intermediate Code:\n")
+            for code in self.intermediateCode:
+                line = " ".join([f"{item[0]} {item[1]}" for item in code])
+                f.write(line + "\n")
+
+    def parseFile(self, filename):
+        with open(filename, "r") as file:
+            for line in file:
+                self.processLine(line)
+        self.writeToFile()
+
+
+if __name__ == "__main__":
+    assembler = AssemblerPass1()
+    # Read input from "input.asm" file
+    input_file = "input.asm"
+    assembler.parseFile(input_file)
+
+    print("Processing completed. Check SymbolTable.txt, LiteralTable.txt, PoolTable.txt, and IntermediateCode.txt for results.")
+
+
+
+
+
+*********************************************pass2
+
+import re
+pattern = re.compile(r'\(\'([A-Z]{,2})\',\s(\d+)\)')
+
+tab = "\t"
+
+class pass2:
+    def __init__(self):
+        self.ICFile = open("intermediateCode.txt",mode='r')
+        self.literalTableFile = open("literalTable.txt",mode='r')
+        self.symbolTableFile = open("symbolTable.txt",mode='r')
+        self.outputFile = open("output.txt",mode='w')
+        self.literalTable = {}
+        self.symbolTable= {}
+
+    def convertToString(self,string):
+        string = str(string)
+        if len(string) == 1:
+            return "00" + string
+        elif len(string) == 2:
+            return "0" + string
+        elif len(string) == 3:
+            return string
+
+    def readSymbolTable(self):
+        print("\nSymbol Table:")
+        for line in self.symbolTableFile.readlines():
+            line = line.split("\t")
+            index = int(line[0])
+            location = int(line[2])
+            self.symbolTable[index] = location
+            print(index,location,sep="\t")
+        print("\n")
+
+    def readLiteralTable(self):
+        print("\nLiteral Table:")
+        for line in self.literalTableFile.readlines():
+            line = line.split('\t')
+            index = int(line[0])
+            location = int(line[2])
+            self.literalTable[index] = location
+            print(index,location,sep="\t")
+        print("\n")
+
+
+    def parseFile(self):
+        self.readLiteralTable()
+        self.readSymbolTable()
+        print("Machine Code:")
+        print("LC\tOPCODE\tOP1\tOP2")
+        for line in self.ICFile.readlines():
+            line = line.strip("\n")
+            line = line.split("\t")
+            find = pattern.search(line[0])
+
+            if find.group(1) == "IS" or find.group(1) == "DL":
+                lineToParse = ""
+                location = line[-2]
+                lineToParse += location + tab
+
+                if find.group(1) == "IS":
+                    lineToParse += self.convertToString(find.group(2)) + tab
+
+                    if find.group(2) == "10" or find.group(2) == "9":
+                        find = pattern.search(line[1])
+                        key = int(find.group(2))
+                        lineToParse += "000" + tab + self.convertToString(self.symbolTable[key]) + "\n"
+                    elif find.group(2) == "0":
+                        lineToParse += "000" + tab + "000" + "\n"
+                    else:
+                        find = pattern.search(line[1])
+                        lineToParse += self.convertToString(find.group(2)) + tab
+
+                        find = pattern.search(line[2])
+                        if find.group(1) == "S":
+                            key = int(find.group(2))
+                            lineToParse += self.convertToString(self.symbolTable[key]) + "\n"
+                        elif find.group(1) == "L":
+                            key = int(find.group(2))
+                            lineToParse += self.convertToString(self.literalTable[key]) + "\n"
+                else:
+                    if find.group(2) == "1":
+                        lineToParse += "000" + tab + "000" + tab
+                        find = pattern.search(line[1])
+                        lineToParse += self.convertToString(find.group(2)) + "\n"
+                    else:
+                        lineToParse += "000" + tab + "000" + tab + "000" + "\n"
+            else:
+                continue
+            print(lineToParse,end="")
+            self.outputFile.write(lineToParse)
+        self.outputFile.close()
+        self.literalTableFile.close()
+        self.symbolTableFile.close()
+
+
+obj = pass2()
+obj.parseFile()
+
+
+
+
+
+
+***************************************DLL
+
+********* testJni1.java ************
+public class testJni1
+{
+static{
+System.loadLibrary("native");
+}
+public static void main(String args[])
+{
+System.out.println("Addition is "+ new testJni1().add(10,20));
+}
+private native int add(int n1,int n2);
+}
+
+****** Compiling the file ********
+Command:-
+gescoe@gescoe-optiplex-3020:~/Documents/AY21-22/LP-1$ javac -h . testJni1.java
+
+********** testJni1.c **********
+#include<jni.h>
+#include<stdio.h>
+#include "testJni1.h" JNIEXPORT jint JNICALL Java_testJni1_add
+(JNIEnv *env, jobject thisobj, jint n1, jint n2)
+{
+jint res;
+res=n1+n2;
+return res;
+}
+ 
+******** Compiling the file *********
+Command :-
+gescoe@gescoe-optiplex-3020:~/Documents/AY21-22/LP-1$ gcc -c -fPIC -I
+/usr/lib/jvm/java-1.8.0-openjdk-amd64/include
+-I/usr/lib/jvm/java-1.8.0-openjdk-amd64/include/linux testJni1.c -o testJni1.o
+
+***** After That RUn These Two Commands *******
+
+gescoe@gescoe-optiplex-3020:~/Documents/AY21-22/LP-1$ gcc -shared -fPIC -o
+libnative.so testJni1.o -lc
+
+gescoe@gescoe-optiplex-3020:~/Documents/AY21-22/LP-1$ java -Djava.library.path=. testJni1
+
+
+
+****************************************** semaphore
+
+import java.util.concurrent.Semaphore;
+import java.util.Scanner;
+
+public class Synchronized {
+
+    static Semaphore mutex = new Semaphore(1); // mutex = 1
+    static Semaphore wrt = new Semaphore(1); // wrt = 1
+    static int readCount = 0;
+    static String message = "Hello";
+    static Scanner SC = new Scanner(System.in);
+
+    static class Reader implements Runnable { // Reader Thread
+        public void run() {
+            try {
+                // Acquire Section
+                mutex.acquire();
+                readCount++;
+                if (readCount == 1) {
+                    wrt.acquire();
+                }
+                mutex.release();
+                // Reading section
+                System.out.println("Thread " + Thread.currentThread().getName() + " is READING: " + message);
+                Thread.sleep(1500);
+                System.out.println("Thread " + Thread.currentThread().getName() + " has FINISHED READING");
+                // Releasing section
+                mutex.acquire();
+                readCount--;
+                if (readCount == 0) {
+                    wrt.release();
+                }
+                mutex.release();
+            } catch (InterruptedException e) {
+                System.out.println(e.getMessage());
+            }
+        }
+    }
+
+    static class Writer implements Runnable { // Writer Thread
+        public void run() {
+            try {
+                wrt.acquire();
+                message = "Good Morning";
+                System.out.println("Thread " + Thread.currentThread().getName() + " is WRITING: " + message);
+
+                Thread.sleep(1500);
+                System.out.println("Thread " + Thread.currentThread().getName() + " has finished WRITING");
+                wrt.release();
+            } catch (InterruptedException e) {
+                System.out.println(e.getMessage());
+            }
+        }
+    }
+
+    // Main Program
+    public static void main(String[] args) throws Exception {
+        Reader read = new Reader();
+        Writer write = new Writer();
+        Thread r1 = new Thread(read);
+        r1.setName("Reader1");
+        Thread r2 = new Thread(read);
+        r2.setName("Reader2");
+        Thread r3 = new Thread(read);
+        r3.setName("Reader3");
+        Thread w1 = new Thread(write);
+        w1.setName("Writer1");
+        Thread w2 = new Thread(write);
+        w2.setName("Writer2");
+        Thread w3 = new Thread(write);
+        w3.setName("Writer3");
+        w1.start();
+        r1.start();
+        w2.start();
+        r2.start();
+        w3.start();
+        r3.start();
+
+    }
+}
+
+
+
+**************************************************FCFS
+import java.util.*;
+
+class Process {
+    int id, arrivalTime, burstTime, completionTime, turnaroundTime, waitingTime, remainingTime;
+
+    // Constructor for FCFS and Round Robin processes
+    Process(int id, int arrivalTime, int burstTime) {
+        this.id = id;
+        this.arrivalTime = arrivalTime;
+        this.burstTime = burstTime;
+        this.remainingTime = burstTime; // For Round Robin
+    }
+}
+
+public class CPUScheduling {
+
+    // Function to simulate FCFS Scheduling
+    public static void fcfsScheduling(Process[] processes, int n) {
+        // Sort processes by arrival time
+        Arrays.sort(processes, Comparator.comparingInt(p -> p.arrivalTime));
+
+        int currentTime = 0;
+        double totalTurnaroundTime = 0, totalWaitingTime = 0;
+
+        System.out.println("\nFCFS Scheduling:");
+        System.out.println("Process\tArrival Time\tBurst Time\tCompletion Time\tTurnaround Time\tWaiting Time");
+
+        for (Process process : processes) {
+            if (currentTime < process.arrivalTime) {
+                currentTime = process.arrivalTime;
+            }
+            process.completionTime = currentTime + process.burstTime;
+            process.turnaroundTime = process.completionTime - process.arrivalTime;
+            process.waitingTime = process.turnaroundTime - process.burstTime;
+            currentTime = process.completionTime;
+
+            // Display process details
+            System.out.println(process.id + "\t\t" + process.arrivalTime + "\t\t" + process.burstTime + "\t\t"
+                    + process.completionTime + "\t\t" + process.turnaroundTime + "\t\t" + process.waitingTime);
+
+            totalTurnaroundTime += process.turnaroundTime;
+            totalWaitingTime += process.waitingTime;
+        }
+
+        System.out.println("\nAverage Turnaround Time: " + (totalTurnaroundTime / n));
+        System.out.println("Average Waiting Time: " + (totalWaitingTime / n));
+    }
+
+    // Function to simulate Round Robin Scheduling
+    public static void roundRobinScheduling(List<Process> processes, int timeQuantum) {
+        int currentTime = 0;
+        Queue<Process> queue = new LinkedList<>();
+        int totalWaitingTime = 0, totalTurnaroundTime = 0;
+
+        // Sort processes by arrival time
+        processes.sort(Comparator.comparingInt(p -> p.arrivalTime));
+
+        int index = 0;
+        while (index < processes.size() || !queue.isEmpty()) {
+            // Add processes that have arrived by the current time
+            while (index < processes.size() && processes.get(index).arrivalTime <= currentTime) {
+                queue.add(processes.get(index));
+                index++;
+            }
+
+            if (!queue.isEmpty()) {
+                Process currentProcess = queue.poll();
+
+                // Execute the process for a time slice
+                int timeToExecute = Math.min(timeQuantum, currentProcess.remainingTime);
+                currentTime += timeToExecute;
+                currentProcess.remainingTime -= timeToExecute;
+
+                System.out.println("Time " + (currentTime - timeToExecute) + " - " + currentTime + ": P"
+                        + currentProcess.id);
+
+                // If the process is not finished, add it back to the queue
+                if (currentProcess.remainingTime > 0) {
+                    queue.add(currentProcess);
+                } else {
+                    // Calculate waiting time and turnaround time for completed process
+                    int waitingTime = currentTime - currentProcess.arrivalTime - currentProcess.burstTime;
+                    int turnaroundTime = currentTime - currentProcess.arrivalTime;
+                    totalWaitingTime += waitingTime;
+                    totalTurnaroundTime += turnaroundTime;
+                }
+            } else {
+                currentTime++; // If no process is ready, just advance time
+            }
+        }
+
+        // Print average waiting and turnaround time
+        System.out.println("\nAverage Waiting Time: " + (double) totalWaitingTime / processes.size());
+        System.out.println("Average Turnaround Time: " + (double) totalTurnaroundTime / processes.size());
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+
+        while (true) {
+            // Menu-driven option selection
+            System.out.println("\n--- CPU Scheduling Algorithms ---");
+            System.out.println("1. FCFS Scheduling");
+            System.out.println("2. Round Robin Scheduling");
+            System.out.println("3. Exit");
+            System.out.print("Choose an option: ");
+            int choice = sc.nextInt();
+
+            switch (choice) {
+                case 1:
+                    // FCFS Scheduling
+                    System.out.print("Enter the number of processes: ");
+                    int n = sc.nextInt();
+
+                    Process[] fcfsProcesses = new Process[n];
+                    for (int i = 0; i < n; i++) {
+                        System.out.print("Enter arrival time for process " + (i + 1) + ": ");
+                        int arrivalTime = sc.nextInt();
+                        System.out.print("Enter burst time for process " + (i + 1) + ": ");
+                        int burstTime = sc.nextInt();
+                        fcfsProcesses[i] = new Process(i + 1, arrivalTime, burstTime);
+                    }
+
+                    // Call FCFS scheduling function
+                    fcfsScheduling(fcfsProcesses, n);
+                    break;
+
+                case 2:
+                    // Round Robin Scheduling
+                    System.out.print("Enter the number of processes: ");
+                    int numProcesses = sc.nextInt();
+
+                    List<Process> rrProcesses = new ArrayList<>();
+                    for (int i = 0; i < numProcesses; i++) {
+                        System.out.print("Enter arrival time for process " + (i + 1) + ": ");
+                        int arrivalTime = sc.nextInt();
+                        System.out.print("Enter burst time for process " + (i + 1) + ": ");
+                        int burstTime = sc.nextInt();
+                        rrProcesses.add(new Process(i + 1, arrivalTime, burstTime));
+                    }
+
+                    System.out.print("Enter time quantum: ");
+                    int timeQuantum = sc.nextInt();
+
+                    // Call Round Robin scheduling function
+                    roundRobinScheduling(rrProcesses, timeQuantum);
+                    break;
+
+                case 3:
+                    // Exit the program
+                    System.out.println("Exiting program...");
+                    sc.close();
+                    return;
+
+                default:
+                    System.out.println("Invalid choice. Please try again.");
+            }
+        }
+    }
+}
+
+******************************************option
+import java.util.*;
+
+class Process {
+    int id, arrivalTime, burstTime, completionTime, turnaroundTime, waitingTime, remainingTime;
+
+    // Constructor for FCFS and Round Robin processes
+    Process(int id, int arrivalTime, int burstTime) {
+        this.id = id;
+        this.arrivalTime = arrivalTime;
+        this.burstTime = burstTime;
+        this.remainingTime = burstTime; // For Round Robin
+    }
+}
+
+public class CPUScheduling {
+
+    // Function to simulate FCFS Scheduling
+    public static void fcfsScheduling(Process[] processes, int n) {
+        // Sort processes by arrival time
+        Arrays.sort(processes, Comparator.comparingInt(p -> p.arrivalTime));
+
+        int currentTime = 0;
+        double totalTurnaroundTime = 0, totalWaitingTime = 0;
+
+        System.out.println("\nFCFS Scheduling:");
+        System.out.println("Process\tArrival Time\tBurst Time\tCompletion Time\tTurnaround Time\tWaiting Time");
+
+        for (Process process : processes) {
+            if (currentTime < process.arrivalTime) {
+                currentTime = process.arrivalTime;
+            }
+            process.completionTime = currentTime + process.burstTime;
+            process.turnaroundTime = process.completionTime - process.arrivalTime;
+            process.waitingTime = process.turnaroundTime - process.burstTime;
+            currentTime = process.completionTime;
+
+            // Display process details
+            System.out.println(process.id + "\t\t" + process.arrivalTime + "\t\t" + process.burstTime + "\t\t"
+                    + process.completionTime + "\t\t" + process.turnaroundTime + "\t\t" + process.waitingTime);
+
+            totalTurnaroundTime += process.turnaroundTime;
+            totalWaitingTime += process.waitingTime;
+        }
+
+        System.out.println("\nAverage Turnaround Time: " + (totalTurnaroundTime / n));
+        System.out.println("Average Waiting Time: " + (totalWaitingTime / n));
+    }
+
+    // Function to simulate Round Robin Scheduling
+    public static void roundRobinScheduling(List<Process> processes, int timeQuantum) {
+        int currentTime = 0;
+        Queue<Process> queue = new LinkedList<>();
+        int totalWaitingTime = 0, totalTurnaroundTime = 0;
+
+        // Sort processes by arrival time
+        processes.sort(Comparator.comparingInt(p -> p.arrivalTime));
+
+        int index = 0;
+        while (index < processes.size() || !queue.isEmpty()) {
+            // Add processes that have arrived by the current time
+            while (index < processes.size() && processes.get(index).arrivalTime <= currentTime) {
+                queue.add(processes.get(index));
+                index++;
+            }
+
+            if (!queue.isEmpty()) {
+                Process currentProcess = queue.poll();
+
+                // Execute the process for a time slice
+                int timeToExecute = Math.min(timeQuantum, currentProcess.remainingTime);
+                currentTime += timeToExecute;
+                currentProcess.remainingTime -= timeToExecute;
+
+                System.out.println("Time " + (currentTime - timeToExecute) + " - " + currentTime + ": P"
+                        + currentProcess.id);
+
+                // If the process is not finished, add it back to the queue
+                if (currentProcess.remainingTime > 0) {
+                    queue.add(currentProcess);
+                } else {
+                    // Calculate waiting time and turnaround time for completed process
+                    int waitingTime = currentTime - currentProcess.arrivalTime - currentProcess.burstTime;
+                    int turnaroundTime = currentTime - currentProcess.arrivalTime;
+                    totalWaitingTime += waitingTime;
+                    totalTurnaroundTime += turnaroundTime;
+                }
+            } else {
+                currentTime++; // If no process is ready, just advance time
+            }
+        }
+
+        // Print average waiting and turnaround time
+        System.out.println("\nAverage Waiting Time: " + (double) totalWaitingTime / processes.size());
+        System.out.println("Average Turnaround Time: " + (double) totalTurnaroundTime / processes.size());
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+
+        while (true) {
+            // Menu-driven option selection
+            System.out.println("\n--- CPU Scheduling Algorithms ---");
+            System.out.println("1. FCFS Scheduling");
+            System.out.println("2. Round Robin Scheduling");
+            System.out.println("3. Exit");
+            System.out.print("Choose an option: ");
+            int choice = sc.nextInt();
+
+            switch (choice) {
+                case 1:
+                    // FCFS Scheduling
+                    System.out.print("Enter the number of processes: ");
+                    int n = sc.nextInt();
+
+                    Process[] fcfsProcesses = new Process[n];
+                    for (int i = 0; i < n; i++) {
+                        System.out.print("Enter arrival time for process " + (i + 1) + ": ");
+                        int arrivalTime = sc.nextInt();
+                        System.out.print("Enter burst time for process " + (i + 1) + ": ");
+                        int burstTime = sc.nextInt();
+                        fcfsProcesses[i] = new Process(i + 1, arrivalTime, burstTime);
+                    }
+
+                    // Call FCFS scheduling function
+                    fcfsScheduling(fcfsProcesses, n);
+                    break;
+
+                case 2:
+                    // Round Robin Scheduling
+                    System.out.print("Enter the number of processes: ");
+                    int numProcesses = sc.nextInt();
+
+                    List<Process> rrProcesses = new ArrayList<>();
+                    for (int i = 0; i < numProcesses; i++) {
+                        System.out.print("Enter arrival time for process " + (i + 1) + ": ");
+                        int arrivalTime = sc.nextInt();
+                        System.out.print("Enter burst time for process " + (i + 1) + ": ");
+                        int burstTime = sc.nextInt();
+                        rrProcesses.add(new Process(i + 1, arrivalTime, burstTime));
+                    }
+
+                    System.out.print("Enter time quantum: ");
+                    int timeQuantum = sc.nextInt();
+
+                    // Call Round Robin scheduling function
+                    roundRobinScheduling(rrProcesses, timeQuantum);
+                    break;
+
+                case 3:
+                    // Exit the program
+                    System.out.println("Exiting program...");
+                    sc.close();
+                    return;
+
+                default:
+                    System.out.println("Invalid choice. Please try again.");
+            }
+        }
+    }
+}
+
+
+
+********************************************************SJF
+
+import java.util.*;
+
+class Process {
+    int id, arrivalTime, burstTime, completionTime, turnaroundTime, waitingTime;
+
+    // Constructor for processes
+    Process(int id, int arrivalTime, int burstTime) {
+        this.id = id;
+        this.arrivalTime = arrivalTime;
+        this.burstTime = burstTime;
+    }
+}
+
+public class PGreplacement1 {
+
+    // Function to simulate Shortest Job First (SJF) Scheduling
+    public static void sjfScheduling(Process[] processes, int n) {
+        // Sort processes by arrival time
+        Arrays.sort(processes, Comparator.comparingInt(p -> p.arrivalTime));
+
+        int currentTime = 0;
+        double totalTurnaroundTime = 0, totalWaitingTime = 0;
+
+        // Queue to hold processes that are ready for execution
+        PriorityQueue<Process> readyQueue = new PriorityQueue<>(Comparator.comparingInt(p -> p.burstTime));
+
+        int index = 0;
+        while (index < n || !readyQueue.isEmpty()) {
+            // Add all processes that have arrived by currentTime to the readyQueue
+            while (index < n && processes[index].arrivalTime <= currentTime) {
+                readyQueue.add(processes[index]);
+                index++;
+            }
+
+            if (!readyQueue.isEmpty()) {
+                // Select the process with the shortest burst time
+                Process currentProcess = readyQueue.poll();
+
+                // Execute the process
+                currentTime += currentProcess.burstTime;
+                currentProcess.completionTime = currentTime;
+                currentProcess.turnaroundTime = currentTime - currentProcess.arrivalTime;
+                currentProcess.waitingTime = currentProcess.turnaroundTime - currentProcess.burstTime;
+
+                // Print details for the current process
+                System.out.println("Process " + currentProcess.id + " - Arrival Time: " + currentProcess.arrivalTime +
+                        ", Burst Time: " + currentProcess.burstTime + ", Completion Time: "
+                        + currentProcess.completionTime +
+                        ", Turnaround Time: " + currentProcess.turnaroundTime + ", Waiting Time: "
+                        + currentProcess.waitingTime);
+
+                totalTurnaroundTime += currentProcess.turnaroundTime;
+                totalWaitingTime += currentProcess.waitingTime;
+            } else {
+                // If no process is ready, increment time
+                currentTime++;
+            }
+        }
+
+        // Calculate and print average waiting time and turnaround time
+        System.out.println("\nAverage Turnaround Time: " + (totalTurnaroundTime / n));
+        System.out.println("Average Waiting Time: " + (totalWaitingTime / n));
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+
+        // Input number of processes
+        System.out.print("Enter number of processes: ");
+        int n = sc.nextInt();
+
+        Process[] processes = new Process[n];
+
+        // Input arrival time and burst time for each process
+        for (int i = 0; i < n; i++) {
+            System.out.println("Enter details for Process " + (i + 1) + ":");
+            System.out.print("Arrival Time: ");
+            int arrivalTime = sc.nextInt();
+            System.out.print("Burst Time: ");
+            int burstTime = sc.nextInt();
+            processes[i] = new Process(i + 1, arrivalTime, burstTime);
+        }
+
+        // Call SJF scheduling function
+        sjfScheduling(processes, n);
+
+        sc.close();
+    }
+}
+
+ip 
+5
+1 7
+6 2
+3 3
+9 8
+7 10
+
+
+*********************************************************fifo
+import java.util.*;
+
+class Process {
+    int id, arrivalTime, burstTime, completionTime, turnaroundTime, waitingTime;
+
+    // Constructor for processes
+    Process(int id, int arrivalTime, int burstTime) {
+        this.id = id;
+        this.arrivalTime = arrivalTime;
+        this.burstTime = burstTime;
+    }
+}
+
+public class PGreplacement1 {
+
+    // Function to simulate Shortest Job First (SJF) Scheduling
+    public static void sjfScheduling(Process[] processes, int n) {
+        // Sort processes by arrival time
+        Arrays.sort(processes, Comparator.comparingInt(p -> p.arrivalTime));
+
+        int currentTime = 0;
+        double totalTurnaroundTime = 0, totalWaitingTime = 0;
+
+        // Queue to hold processes that are ready for execution
+        PriorityQueue<Process> readyQueue = new PriorityQueue<>(Comparator.comparingInt(p -> p.burstTime));
+
+        int index = 0;
+        while (index < n || !readyQueue.isEmpty()) {
+            // Add all processes that have arrived by currentTime to the readyQueue
+            while (index < n && processes[index].arrivalTime <= currentTime) {
+                readyQueue.add(processes[index]);
+                index++;
+            }
+
+            if (!readyQueue.isEmpty()) {
+                // Select the process with the shortest burst time
+                Process currentProcess = readyQueue.poll();
+
+                // Execute the process
+                currentTime += currentProcess.burstTime;
+                currentProcess.completionTime = currentTime;
+                currentProcess.turnaroundTime = currentTime - currentProcess.arrivalTime;
+                currentProcess.waitingTime = currentProcess.turnaroundTime - currentProcess.burstTime;
+
+                // Print details for the current process
+                System.out.println("Process " + currentProcess.id + " - Arrival Time: " + currentProcess.arrivalTime +
+                        ", Burst Time: " + currentProcess.burstTime + ", Completion Time: "
+                        + currentProcess.completionTime +
+                        ", Turnaround Time: " + currentProcess.turnaroundTime + ", Waiting Time: "
+                        + currentProcess.waitingTime);
+
+                totalTurnaroundTime += currentProcess.turnaroundTime;
+                totalWaitingTime += currentProcess.waitingTime;
+            } else {
+                // If no process is ready, increment time
+                currentTime++;
+            }
+        }
+
+        // Calculate and print average waiting time and turnaround time
+        System.out.println("\nAverage Turnaround Time: " + (totalTurnaroundTime / n));
+        System.out.println("Average Waiting Time: " + (totalWaitingTime / n));
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+
+        // Input number of processes
+        System.out.print("Enter number of processes: ");
+        int n = sc.nextInt();
+
+        Process[] processes = new Process[n];
+
+        // Input arrival time and burst time for each process
+        for (int i = 0; i < n; i++) {
+            System.out.println("Enter details for Process " + (i + 1) + ":");
+            System.out.print("Arrival Time: ");
+            int arrivalTime = sc.nextInt();
+            System.out.print("Burst Time: ");
+            int burstTime = sc.nextInt();
+            processes[i] = new Process(i + 1, arrivalTime, burstTime);
+        }
+
+        // Call SJF scheduling function
+        sjfScheduling(processes, n);
+
+        sc.close();
+    }
+}
+
+ip 
+5
+1 7
+6 2
+3 3
+9 8
+7 10
+
+
+*************************************************fifo
+
+import java.io.*;
+
+public class fifo {
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        int frames, pointer = 0, hit = 0, fault = 0, ref_len;
+        int buffer[];
+        int reference[];
+        int mem_layout[][];
+
+        System.out.println("Please enter the number of Frames: ");
+        frames = Integer.parseInt(br.readLine());
+
+        System.out.println("Please enter the length of the Reference string: ");
+        ref_len = Integer.parseInt(br.readLine());
+
+        reference = new int[ref_len];
+        mem_layout = new int[ref_len][frames];
+        buffer = new int[frames];
+        for (int j = 0; j < frames; j++)
+            buffer[j] = -1;
+
+        System.out.println("Please enter the reference string: ");
+        for (int i = 0; i < ref_len; i++) {
+            reference[i] = Integer.parseInt(br.readLine());
+        }
+        System.out.println();
+        for (int i = 0; i < ref_len; i++) {
+            int search = -1;
+            for (int j = 0; j < frames; j++) {
+                if (buffer[j] == reference[i]) {
+                    search = j;
+                    hit++;
+                    break;
+                }
+            }
+            if (search == -1) {
+                buffer[pointer] = reference[i];
+                fault++;
+                pointer++;
+                if (pointer == frames)
+                    pointer = 0;
+            }
+            for (int j = 0; j < frames; j++)
+                mem_layout[i][j] = buffer[j];
+        }
+
+        for (int i = 0; i < frames; i++) {
+            for (int j = 0; j < ref_len; j++)
+                System.out.printf("%3d ", mem_layout[j][i]);
+            System.out.println();
+        }
+
+        System.out.println("The number of Hits: " + hit);
+        System.out.println("Hit Ratio: " + (float) ((float) hit / ref_len));
+        System.out.println("The number of Faults: " + fault);
+    }
+
+}
+
+
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+
+public class optimal {
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        int frames, pointer = 0, hit = 0, fault = 0, ref_len;
+        boolean isFull = false;
+        int buffer[];
+        int reference[];
+        int mem_layout[][];
+
+        System.out.println("Please enter the number of Frames: ");
+        frames = Integer.parseInt(br.readLine());
+
+        System.out.println("Please enter the length of the Reference string: ");
+        ref_len = Integer.parseInt(br.readLine());
+
+        reference = new int[ref_len];
+        mem_layout = new int[ref_len][frames];
+        buffer = new int[frames];
+        for (int j = 0; j < frames; j++)
+            buffer[j] = -1;
+
+        System.out.println("Please enter the reference string: ");
+        for (int i = 0; i < ref_len; i++) {
+            reference[i] = Integer.parseInt(br.readLine());
+        }
+        System.out.println();
+        for (int i = 0; i < ref_len; i++) {
+            int search = -1;
+            for (int j = 0; j < frames; j++) {
+                if (buffer[j] == reference[i]) {
+                    search = j;
+                    hit++;
+                    break;
+                }
+            }
+            if (search == -1) {
+                if (isFull) {
+                    int index[] = new int[frames];
+                    boolean index_flag[] = new boolean[frames];
+                    for (int j = i + 1; j < ref_len; j++) {
+                        for (int k = 0; k < frames; k++) {
+                            if ((reference[j] == buffer[k]) && (index_flag[k] == false)) {
+                                index[k] = j;
+                                index_flag[k] = true;
+                                break;
+                            }
+                        }
+                    }
+                    int max = index[0];
+                    pointer = 0;
+                    if (max == 0)
+                        max = 200;
+                    for (int j = 0; j < frames; j++) {
+                        if (index[j] == 0)
+                            index[j] = 200;
+                        if (index[j] > max) {
+                            max = index[j];
+                            pointer = j;
+                        }
+                    }
+                }
+                buffer[pointer] = reference[i];
+                fault++;
+                if (!isFull) {
+                    pointer++;
+                    if (pointer == frames) {
+                        pointer = 0;
+                        isFull = true;
+                    }
+                }
+            }
+            for (int j = 0; j < frames; j++)
+                mem_layout[i][j] = buffer[j];
+        }
+
+        for (int i = 0; i < frames; i++) {
+            for (int j = 0; j < ref_len; j++)
+                System.out.printf("%3d ", mem_layout[j][i]);
+            System.out.println();
+        }
+
+        System.out.println("The number of Hits: " + hit);
+        System.out.println("Hit Ratio: " + (float) ((float) hit / ref_len));
+        System.out.println("The number of Faults: " + fault);
+    }
+
+}
+
+
+
+*********************************************************BEST
+
+import java.util.Scanner;
+
+public class best {
+
+    // Function to implement Best Fit memory allocation
+    public static void bestFit(int[] memory, int[] process) {
+        // memory[] - array representing the memory blocks (available memory sizes)
+        // process[] - array representing the process sizes
+
+        // Loop over each process
+        for (int i = 0; i < process.length; i++) {
+            int bestIdx = -1;
+            int minSize = Integer.MAX_VALUE;
+
+            // Find the best fit for the current process
+            for (int j = 0; j < memory.length; j++) {
+                if (memory[j] >= process[i] && memory[j] - process[i] < minSize) {
+                    minSize = memory[j] - process[i];
+                    bestIdx = j;
+                }
+            }
+
+            // Allocate memory if a suitable block is found
+            if (bestIdx != -1) {
+                System.out.println("P" + (i + 1) + " is allocated to memory block "
+                        + (bestIdx + 1) + " of size " + memory[bestIdx]);
+                memory[bestIdx] -= process[i]; // Reduce the size of the memory block after allocation
+            } else {
+                System.out.println("P" + (i + 1) + " with size " + process[i] + " cannot be allocated.");
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+
+        // Input the number of memory blocks
+        System.out.print("Enter the number of memory blocks: ");
+        int m = sc.nextInt();
+
+        int[] memory = new int[m];
+
+        // Input the sizes of each memory block
+        System.out.println("Enter the sizes of " + m + " memory blocks:");
+        for (int i = 0; i < m; i++) {
+            memory[i] = sc.nextInt();
+        }
+
+        // Input the number of processes
+        System.out.print("Enter the number of processes: ");
+        int p = sc.nextInt();
+
+        int[] process = new int[p];
+
+        // Input the sizes of each process
+        System.out.println("Enter the sizes of " + p + " processes:");
+        for (int i = 0; i < p; i++) {
+            process[i] = sc.nextInt();
+        }
+
+        // Call Best Fit Memory Placement function
+        bestFit(memory, process);
+
+        sc.close();
+    }
+}
+
+
+import java.util.Scanner;
+
+public class first {
+
+    // Function to perform First Fit Memory Allocation
+    public static void firstFit(int[] memory, int[] processes) {
+        // Loop through all processes
+        for (int i = 0; i < processes.length; i++) {
+            boolean allocated = false;
+
+            // Loop through all memory blocks to find the first available one
+            for (int j = 0; j < memory.length; j++) {
+                // Check if the memory block can accommodate the process
+                if (memory[j] >= processes[i]) {
+                    // Allocate the memory
+                    System.out.println("Process " + (i + 1) + " of size " + processes[i]
+                            + " is allocated to Memory Block " + (j + 1));
+                    memory[j] -= processes[i]; // Decrease the memory block size after allocation
+                    allocated = true;
+                    break;
+                }
+            }
+
+            // If process cannot be allocated
+            if (!allocated) {
+                System.out.println("Process " + (i + 1) + " of size " + processes[i] + " cannot be allocated.");
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+
+        // Input number of memory blocks and processes
+        System.out.print("Enter the number of memory blocks: ");
+        int n = sc.nextInt();
+        int[] memory = new int[n];
+
+        System.out.println("Enter the size of each memory block:");
+        for (int i = 0; i < n; i++) {
+            System.out.print("Memory Block " + (i + 1) + ": ");
+            memory[i] = sc.nextInt();
+        }
+
+        System.out.print("Enter the number of processes: ");
+        int m = sc.nextInt();
+        int[] processes = new int[m];
+
+        System.out.println("Enter the size of each process:");
+        for (int i = 0; i < m; i++) {
+            System.out.print("Process " + (i + 1) + ": ");
+            processes[i] = sc.nextInt();
+        }
+
+        // Call First Fit Memory Allocation function
+        firstFit(memory, processes);
+
+        sc.close();
+    }
+}
+
+
+*******************************************Worst
+
+import java.util.Scanner;
+
+public class next {
+
+    // Function to implement Next Fit Memory Allocation
+    public static void nextFit(int[] memoryBlocks, int[] processes) {
+        int m = memoryBlocks.length; // Number of memory blocks
+        int n = processes.length; // Number of processes
+        int lastAllocatedBlock = 0; // The last memory block where a process was allocated
+
+        // Traverse through all processes and allocate memory
+        for (int i = 0; i < n; i++) {
+            boolean allocated = false;
+
+            // Start from the last allocated block and try to find a suitable memory block
+            for (int j = lastAllocatedBlock; j < m; j++) {
+                if (memoryBlocks[j] >= processes[i]) {
+                    // Allocate memory for process
+                    System.out.println("Process " + (i + 1) + " of size " + processes[i]
+                            + " is allocated to memory block " + (j + 1));
+                    memoryBlocks[j] -= processes[i]; // Reduce the available memory in the block
+                    lastAllocatedBlock = j; // Update last allocated block
+                    allocated = true;
+                    break;
+                }
+            }
+
+            // If no memory block found from last allocated block, start searching from the
+            // beginning
+            if (!allocated) {
+                for (int j = 0; j < lastAllocatedBlock; j++) {
+                    if (memoryBlocks[j] >= processes[i]) {
+                        System.out.println("Process " + (i + 1) + " of size " + processes[i]
+                                + " is allocated to memory block " + (j + 1));
+                        memoryBlocks[j] -= processes[i];
+                        lastAllocatedBlock = j;
+                        allocated = true;
+                        break;
+                    }
+                }
+            }
+
+            // If process could not be allocated to any memory block
+            if (!allocated) {
+                System.out.println("Process " + (i + 1) + " of size " + processes[i]
+                        + " could not be allocated to any memory block.");
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+
+        // Input number of memory blocks
+        System.out.print("Enter the number of memory blocks: ");
+        int m = sc.nextInt();
+
+        // Input size of memory blocks
+        int[] memoryBlocks = new int[m];
+        System.out.println("Enter the size of each memory block:");
+        for (int i = 0; i < m; i++) {
+            memoryBlocks[i] = sc.nextInt();
+        }
+
+        // Input number of processes
+        System.out.print("Enter the number of processes: ");
+        int n = sc.nextInt();
+
+        // Input size of each process
+        int[] processes = new int[n];
+        System.out.println("Enter the size of each process:");
+        for (int i = 0; i < n; i++) {
+            processes[i] = sc.nextInt();
+        }
+
+        // Call Next Fit function to allocate memory
+        nextFit(memoryBlocks, processes);
+
+        sc.close();
+    }
+}
+
+
+import java.util.Scanner;
+
+public class WorstFit {
+
+    // Function to perform Worst Fit allocation
+    public static void worstFit(int[] blocks, int[] processes, int m, int n) {
+        // To store allocation result
+        int[] allocation = new int[n];
+
+        // Initially, no process is assigned to any block
+        for (int i = 0; i < n; i++) {
+            allocation[i] = -1;
+        }
+
+        // Perform Worst Fit Allocation
+        for (int i = 0; i < n; i++) {
+            int worstIndex = -1;
+            for (int j = 0; j < m; j++) {
+                // If the block is big enough to accommodate the process
+                if (blocks[j] >= processes[i]) {
+                    if (worstIndex == -1 || blocks[worstIndex] < blocks[j]) {
+                        worstIndex = j;
+                    }
+                }
+            }
+
+            // If a block is found
+            if (worstIndex != -1) {
+                // Allocate the process to the block
+                allocation[i] = worstIndex;
+                // Reduce the size of the block by the size of the process
+                blocks[worstIndex] -= processes[i];
+            }
+        }
+
+        // Print the allocation result
+        System.out.println("\nProcess No.\tProcess Size\tBlock No.\tBlock Size");
+        for (int i = 0; i < n; i++) {
+            if (allocation[i] != -1) {
+                System.out.println(" " + (i + 1) + "\t\t" + processes[i] + "\t\t" + (allocation[i] + 1) + "\t\t"
+                        + blocks[allocation[i]]);
+            } else {
+                System.out.println(" " + (i + 1) + "\t\t" + processes[i] + "\t\t Not Allocated");
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+
+        // Input the number of memory blocks
+        System.out.print("Enter number of memory blocks: ");
+        int m = sc.nextInt();
+
+        // Input the number of processes
+        System.out.print("Enter number of processes: ");
+        int n = sc.nextInt();
+
+        int[] blocks = new int[m];
+        int[] processes = new int[n];
+
+        // Input memory blocks sizes
+        System.out.println("Enter sizes of memory blocks:");
+        for (int i = 0; i < m; i++) {
+            System.out.print("Block " + (i + 1) + ": ");
+            blocks[i] = sc.nextInt();
+        }
+
+        // Input process sizes
+        System.out.println("Enter sizes of processes:");
+        for (int i = 0; i < n; i++) {
+            System.out.print("Process " + (i + 1) + ": ");
+            processes[i] = sc.nextInt();
+        }
+
+        // Call Worst Fit allocation function
+        worstFit(blocks, processes, m, n);
+
+        sc.close();
+    }
+}
+
+
+

@@ -1,0 +1,97 @@
+import java.util.*;
+
+class Process {
+    int id, arrivalTime, burstTime, completionTime, turnaroundTime, waitingTime;
+
+    // Constructor for processes
+    Process(int id, int arrivalTime, int burstTime) {
+        this.id = id;
+        this.arrivalTime = arrivalTime;
+        this.burstTime = burstTime;
+    }
+}
+
+public class PGreplacement1 {
+
+    // Function to simulate Shortest Job First (SJF) Scheduling
+    public static void sjfScheduling(Process[] processes, int n) {
+        // Sort processes by arrival time
+        Arrays.sort(processes, Comparator.comparingInt(p -> p.arrivalTime));
+
+        int currentTime = 0;
+        double totalTurnaroundTime = 0, totalWaitingTime = 0;
+
+        // Queue to hold processes that are ready for execution
+        PriorityQueue<Process> readyQueue = new PriorityQueue<>(Comparator.comparingInt(p -> p.burstTime));
+
+        int index = 0;
+        while (index < n || !readyQueue.isEmpty()) {
+            // Add all processes that have arrived by currentTime to the readyQueue
+            while (index < n && processes[index].arrivalTime <= currentTime) {
+                readyQueue.add(processes[index]);
+                index++;
+            }
+
+            if (!readyQueue.isEmpty()) {
+                // Select the process with the shortest burst time
+                Process currentProcess = readyQueue.poll();
+
+                // Execute the process
+                currentTime += currentProcess.burstTime;
+                currentProcess.completionTime = currentTime;
+                currentProcess.turnaroundTime = currentTime - currentProcess.arrivalTime;
+                currentProcess.waitingTime = currentProcess.turnaroundTime - currentProcess.burstTime;
+
+                // Print details for the current process
+                System.out.println("Process " + currentProcess.id + " - Arrival Time: " + currentProcess.arrivalTime +
+                        ", Burst Time: " + currentProcess.burstTime + ", Completion Time: "
+                        + currentProcess.completionTime +
+                        ", Turnaround Time: " + currentProcess.turnaroundTime + ", Waiting Time: "
+                        + currentProcess.waitingTime);
+
+                totalTurnaroundTime += currentProcess.turnaroundTime;
+                totalWaitingTime += currentProcess.waitingTime;
+            } else {
+                // If no process is ready, increment time
+                currentTime++;
+            }
+        }
+
+        // Calculate and print average waiting time and turnaround time
+        System.out.println("\nAverage Turnaround Time: " + (totalTurnaroundTime / n));
+        System.out.println("Average Waiting Time: " + (totalWaitingTime / n));
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+
+        // Input number of processes
+        System.out.print("Enter number of processes: ");
+        int n = sc.nextInt();
+
+        Process[] processes = new Process[n];
+
+        // Input arrival time and burst time for each process
+        for (int i = 0; i < n; i++) {
+            System.out.println("Enter details for Process " + (i + 1) + ":");
+            System.out.print("Arrival Time: ");
+            int arrivalTime = sc.nextInt();
+            System.out.print("Burst Time: ");
+            int burstTime = sc.nextInt();
+            processes[i] = new Process(i + 1, arrivalTime, burstTime);
+        }
+
+        // Call SJF scheduling function
+        sjfScheduling(processes, n);
+
+        sc.close();
+    }
+}
+
+ip 
+5
+1 7
+6 2
+3 3
+9 8
+7 10

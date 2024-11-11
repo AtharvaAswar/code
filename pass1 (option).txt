@@ -1,0 +1,154 @@
+class Mnemonics:
+    def __init__(self):
+        # Define tables for AD, IS, DL, and registers
+        self.AD = {"START": 1, "END": 2, "ORIGIN": 3, "EQU": 4, "LTORG": 5}
+        self.RG = {"AREG": 1, "BREG": 2, "CREG": 3}
+        self.DL = {"DC": 1, "DS": 2}
+        self.IS = {
+            "STOP": 0, "ADD": 1, "SUB": 2, "MULT": 3, "MOVER": 4, 
+            "MOVEM": 5, "COMP": 6, "BC": 7, "DIV": 8, "READ": 9, "PRINT": 10
+        }
+        self.CC = {"LT": 1, "LE": 2, "EQ": 3, "GT": 4, "GE": 5, "ANY": 6}
+
+    def getClassType(self, word):
+        if word in self.AD: return "AD"
+        if word in self.IS: return "IS"
+        if word in self.DL: return "DL"
+        if word in self.RG: return "RG"
+        if word in self.CC: return "CC"
+        return ""
+
+    def getCode(self, word):
+        if word in self.AD: return self.AD[word]
+        if word in self.IS: return self.IS[word]
+        if word in self.DL: return self.DL[word]
+        if word in self.RG: return self.RG[word]
+        if word in self.CC: return self.CC[word]
+        return -1
+
+
+class AssemblerPass1:
+    def __init__(self):
+        self.mnemonics = Mnemonics()
+        self.symbolTable = {}
+        self.literalTable = {}
+        self.poolTable = []
+        self.intermediateCode = []
+        self.locationCounter = 0
+        self.literalIndex = 0
+        self.poolTable.append(self.literalIndex)
+
+    def processLine(self, line):
+        parts = line.strip().split()
+        self.intermediateCode.append([])
+
+        if parts[0] == "START":
+            self.locationCounter = int(parts[1])
+            self.intermediateCode[-1].append(("AD", 1))
+            self.intermediateCode[-1].append(("C", self.locationCounter))
+
+        elif len(parts) > 1 and parts[1] in self.mnemonics.DL:
+            self.symbolTable[parts[0]] = self.locationCounter
+            if parts[1] == "DC":
+                self.intermediateCode[-1].append(("DL", 1))
+                self.intermediateCode[-1].append(("C", int(parts[2])))
+            elif parts[1] == "DS":
+                self.intermediateCode[-1].append(("DL", 2))
+                self.intermediateCode[-1].append(("C", int(parts[2])))
+            self.locationCounter += 1
+
+        elif parts[0] in self.mnemonics.IS:
+            self.intermediateCode[-1].append(("IS", self.mnemonics.getCode(parts[0])))
+            if len(parts) > 1 and parts[1] in self.mnemonics.RG:
+                self.intermediateCode[-1].append(("RG", self.mnemonics.getCode(parts[1])))
+            if len(parts) > 2 and parts[2][0] == '=':
+                literal = int(parts[2][2:-1])
+                self.literalTable[self.literalIndex] = [literal, None]
+                self.intermediateCode[-1].append(("L", self.literalIndex))
+                self.literalIndex += 1
+            elif len(parts) > 2:
+                if parts[2] not in self.symbolTable:
+                    self.symbolTable[parts[2]] = None
+                self.intermediateCode[-1].append(("S", list(self.symbolTable.keys()).index(parts[2])))
+            self.locationCounter += 1
+
+        elif parts[0] == "LTORG":
+            self.poolTable.append(self.literalIndex)
+            for i in range(self.poolTable[-2], self.poolTable[-1]):
+                self.literalTable[i][1] = self.locationCounter
+                self.locationCounter += 1
+
+        elif parts[0] == "END":
+            self.poolTable.append(self.literalIndex)
+            for i in range(self.poolTable[-2], self.poolTable[-1]):
+                self.literalTable[i][1] = self.locationCounter
+                self.locationCounter += 1
+            self.intermediateCode[-1].append(("AD", 2))
+
+        else:
+            if parts[0] not in self.symbolTable:
+                self.symbolTable[parts[0]] = self.locationCounter
+            self.locationCounter += 1
+
+    def writeToFile(self):
+        with open("SymbolTable.txt", "w") as f:
+            f.write("Symbol Table:\n")
+            for symbol, address in self.symbolTable.items():
+                f.write(f"{symbol}\t{address}\n")
+
+        with open("LiteralTable.txt", "w") as f:
+            f.write("Literal Table:\n")
+            for literal, details in self.literalTable.items():
+                f.write(f"{literal}\t{details[0]}\t{details[1]}\n")
+
+        with open("PoolTable.txt", "w") as f:
+            f.write("Pool Table:\n")
+            for index in self.poolTable:
+                f.write(f"{index}\n")
+
+        with open("IntermediateCode.txt", "w") as f:
+            f.write("Intermediate Code:\n")
+            for code in self.intermediateCode:
+                line = " ".join([f"{item[0]} {item[1]}" for item in code])
+                f.write(line + "\n")
+
+    def parseFile(self, filename):
+        with open(filename, "r") as file:
+            for line in file:
+                self.processLine(line)
+        self.writeToFile()
+
+
+if __name__ == "__main__":
+    assembler = AssemblerPass1()
+    # Read input from "input.asm" file
+    input_file = "input.asm"
+    assembler.parseFile(input_file)
+
+    print("Processing completed. Check SymbolTable.txt, LiteralTable.txt, PoolTable.txt, and IntermediateCode.txt for results.")
+
+#################################################################
+START	200
+	MOVER	AREG	='5'
+	MOVEM	AREG	A	
+LOOP	MOVER	AREG	A			
+	MOVER	CREG	B
+	ADD	CREG	='1'
+	MOVER	AREG	A
+	MOVER	CREG	B
+	MOVER	AREG	A
+	MOVER	CREG	B
+	MOVER	AREG	A
+	BC	ANY	NEXT
+	LTORG
+	MOVER	AREG	A
+NEXT	SUB	AREG	='1'
+	BC	LT	BACK
+LAST	STOP
+	ORIGIN	LOOP+2
+	MULT	CREG	B
+	ORIGIN	LAST+1
+A	DS	1
+BACK	EQU	LOOP
+B	DS	1
+	END

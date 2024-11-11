@@ -1,0 +1,261 @@
+import re
+pattern = re.compile(r'\(\'([A-Z]{,2})\',\s(\d+)\)')
+
+tab = "\t"
+
+class pass2:
+    def __init__(self):
+        self.ICFile = open("intermediateCode.txt",mode='r')
+        self.literalTableFile = open("literalTable.txt",mode='r')
+        self.symbolTableFile = open("symbolTable.txt",mode='r')
+        self.outputFile = open("output.txt",mode='w')
+        self.literalTable = {}
+        self.symbolTable= {}
+
+    def convertToString(self,string):
+        string = str(string)
+        if len(string) == 1:
+            return "00" + string
+        elif len(string) == 2:
+            return "0" + string
+        elif len(string) == 3:
+            return string
+
+    def readSymbolTable(self):
+        print("\nSymbol Table:")
+        for line in self.symbolTableFile.readlines():
+            line = line.split("\t")
+            index = int(line[0])
+            location = int(line[2])
+            self.symbolTable[index] = location
+            print(index,location,sep="\t")
+        print("\n")
+
+    def readLiteralTable(self):
+        print("\nLiteral Table:")
+        for line in self.literalTableFile.readlines():
+            line = line.split('\t')
+            index = int(line[0])
+            location = int(line[2])
+            self.literalTable[index] = location
+            print(index,location,sep="\t")
+        print("\n")
+
+
+    def parseFile(self):
+        self.readLiteralTable()
+        self.readSymbolTable()
+        print("Machine Code:")
+        print("LC\tOPCODE\tOP1\tOP2")
+        for line in self.ICFile.readlines():
+            line = line.strip("\n")
+            line = line.split("\t")
+            find = pattern.search(line[0])
+
+            if find.group(1) == "IS" or find.group(1) == "DL":
+                lineToParse = ""
+                location = line[-2]
+                lineToParse += location + tab
+
+                if find.group(1) == "IS":
+                    lineToParse += self.convertToString(find.group(2)) + tab
+
+                    if find.group(2) == "10" or find.group(2) == "9":
+                        find = pattern.search(line[1])
+                        key = int(find.group(2))
+                        lineToParse += "000" + tab + self.convertToString(self.symbolTable[key]) + "\n"
+                    elif find.group(2) == "0":
+                        lineToParse += "000" + tab + "000" + "\n"
+                    else:
+                        find = pattern.search(line[1])
+                        lineToParse += self.convertToString(find.group(2)) + tab
+
+                        find = pattern.search(line[2])
+                        if find.group(1) == "S":
+                            key = int(find.group(2))
+                            lineToParse += self.convertToString(self.symbolTable[key]) + "\n"
+                        elif find.group(1) == "L":
+                            key = int(find.group(2))
+                            lineToParse += self.convertToString(self.literalTable[key]) + "\n"
+                else:
+                    if find.group(2) == "1":
+                        lineToParse += "000" + tab + "000" + tab
+                        find = pattern.search(line[1])
+                        lineToParse += self.convertToString(find.group(2)) + "\n"
+                    else:
+                        lineToParse += "000" + tab + "000" + tab + "000" + "\n"
+            else:
+                continue
+            print(lineToParse,end="")
+            self.outputFile.write(lineToParse)
+        self.outputFile.close()
+        self.literalTableFile.close()
+        self.symbolTableFile.close()
+
+
+obj = pass2()
+obj.parseFile()
+
+###########################################################
+
+This Python code implements **Pass 2** of a **two-pass assembler** for an assembly-like language. The purpose of **Pass 2** is to generate the actual **machine code** using the **intermediate code** and the tables (symbol table, literal table) created in **Pass 1**.
+
+### Explanation and Logic
+
+#### **Overview of the Pass 2 Process**
+1. **Input Files**:
+   - **intermediateCode.txt**: Contains the intermediate representation of assembly code.
+   - **symbolTable.txt**: Contains user-defined labels and variables with their memory addresses.
+   - **literalTable.txt**: Contains literals with their assigned memory addresses.
+
+2. **Output File**:
+   - **output.txt**: The machine code generated from the input files.
+
+3. **Main Steps**:
+   - Load the symbol table and literal table into memory.
+   - Read each line of intermediate code.
+   - Decode the operation and generate the corresponding machine code line by line.
+
+### Detailed Breakdown
+
+#### **1. Initialization and File Reading (`__init__`)**
+```python
+class pass2:
+    def __init__(self):
+        self.ICFile = open("intermediateCode.txt",mode='r')
+        self.literalTableFile = open("literalTable.txt",mode='r')
+        self.symbolTableFile = open("symbolTable.txt",mode='r')
+        self.outputFile = open("output.txt",mode='w')
+        self.literalTable = {}
+        self.symbolTable= {}
+```
+- The code opens the input files for reading (`ICFile`, `literalTableFile`, `symbolTableFile`) and prepares an output file (`outputFile`) for writing.
+- Two dictionaries, `literalTable` and `symbolTable`, are initialized to store data from their respective tables.
+
+#### **2. Convert to String Method (`convertToString`)**
+```python
+def convertToString(self, string):
+    string = str(string)
+    if len(string) == 1:
+        return "00" + string
+    elif len(string) == 2:
+        return "0" + string
+    elif len(string) == 3:
+        return string
+```
+- This method ensures that numbers are formatted as 3-digit strings (e.g., `1` becomes `001`).
+- It helps standardize the output format for machine code.
+
+#### **3. Reading Symbol and Literal Tables (`readSymbolTable`, `readLiteralTable`)**
+```python
+def readSymbolTable(self):
+    for line in self.symbolTableFile.readlines():
+        line = line.split("\t")
+        index = int(line[0])
+        location = int(line[2])
+        self.symbolTable[index] = location
+
+def readLiteralTable(self):
+    for line in self.literalTableFile.readlines():
+        line = line.split('\t')
+        index = int(line[0])
+        location = int(line[2])
+        self.literalTable[index] = location
+```
+- These methods read data from the `symbolTable.txt` and `literalTable.txt` files.
+- They store the symbol addresses and literal addresses in dictionaries (`self.symbolTable`, `self.literalTable`).
+- `index` is the key (the position of the symbol or literal in the table), and `location` is the memory address.
+
+#### **4. Parsing the Intermediate Code (`parseFile`)**
+```python
+def parseFile(self):
+    self.readLiteralTable()
+    self.readSymbolTable()
+    for line in self.ICFile.readlines():
+        line = line.strip("\n")
+        line = line.split("\t")
+        find = pattern.search(line[0])
+```
+- This method starts by reading the literal and symbol tables.
+- It then reads the intermediate code line by line, splits each line into parts (by tabs), and identifies the type of instruction using a regular expression.
+
+#### **5. Processing Different Types of Instructions**
+```python
+if find.group(1) == "IS" or find.group(1) == "DL":
+    lineToParse = ""
+    location = line[-2]
+    lineToParse += location + tab
+```
+- If the instruction is an **Imperative Statement (IS)** or **Declarative Statement (DL)**, it processes the line.
+
+**For Imperative Statements (IS)**:
+```python
+if find.group(1) == "IS":
+    lineToParse += self.convertToString(find.group(2)) + tab
+    if find.group(2) == "10" or find.group(2) == "9":  # For PRINT and READ
+        find = pattern.search(line[1])
+        key = int(find.group(2))
+        lineToParse += "000" + tab + self.convertToString(self.symbolTable[key]) + "\n"
+    elif find.group(2) == "0":  # For STOP
+        lineToParse += "000" + tab + "000" + "\n"
+    else:
+        find = pattern.search(line[1])
+        lineToParse += self.convertToString(find.group(2)) + tab
+        find = pattern.search(line[2])
+        if find.group(1) == "S":
+            key = int(find.group(2))
+            lineToParse += self.convertToString(self.symbolTable[key]) + "\n"
+        elif find.group(1) == "L":
+            key = int(find.group(2))
+            lineToParse += self.convertToString(self.literalTable[key]) + "\n"
+```
+- For **IS** (e.g., `MOVER`, `ADD`):
+  - The opcode and operand information are formatted.
+  - Special cases like `PRINT`, `READ`, and `STOP` have specific handling.
+  - If the operand is a **symbol (`S`)**, its address is fetched from the symbol table.
+  - If the operand is a **literal (`L`)**, its address is fetched from the literal table.
+
+**For Declarative Statements (DL)**:
+```python
+else:  # DL (e.g., DC, DS)
+    if find.group(2) == "1":  # DC
+        lineToParse += "000" + tab + "000" + tab
+        find = pattern.search(line[1])
+        lineToParse += self.convertToString(find.group(2)) + "\n"
+    else:  # DS
+        lineToParse += "000" + tab + "000" + tab + "000" + "\n"
+```
+- For **DL** (e.g., `DC`, `DS`):
+  - The code formats the line with the appropriate values for DC (Define Constant) or DS (Define Storage).
+
+#### **6. Writing Output**
+```python
+print(lineToParse, end="")
+self.outputFile.write(lineToParse)
+self.outputFile.close()
+self.literalTableFile.close()
+self.symbolTableFile.close()
+```
+- The formatted machine code line is printed and written to the `output.txt` file.
+- Finally, all open files are closed.
+
+### **Example**
+Given an intermediate code line:
+```
+('IS', 4)  ('RG', 1)  ('L', 0)  101
+```
+- **Parsing**:
+  - `IS 4`: This is an imperative statement (`MOVER`).
+  - `RG 1`: Register `AREG`.
+  - `L 0`: Literal at index `0`.
+  - Location counter is `101`.
+- **Output**:
+  ```
+  101   004   001   100
+  ```
+  - `101` is the address, `004` is the opcode for `MOVER`, `001` is the register code for `AREG`, and `100` is the address of the literal (assuming `100` is its address).
+
+### **Summary**
+- **Pass 2** uses the intermediate code and tables from Pass 1 to generate the final machine code.
+- It identifies the instruction type, fetches the required addresses from tables, formats the output, and writes it to the machine code file.
+- This approach makes it easy to handle complex assembly programs by splitting the process into **Pass 1** (table creation) and **Pass 2** (machine code generation).
